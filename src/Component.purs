@@ -11,21 +11,23 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 
-data Query a
-  = Receive Input a
+data Query o a
+  = Raise (o Unit) a
+  | Receive (Input o) a
 
-type StateStore =
-  Store State (H.ComponentHTML Query)
+type StateStore o =
+  Store State (H.ComponentHTML (Query o))
 
 type State = Unit
 
-type Input = { render :: State -> H.ComponentHTML Query }
+type Input o = { render :: State -> H.ComponentHTML (Query o) }
 
-type Message = Void
+data Message o
+  = Emit (o Unit)
 
-component :: ∀ eff m
+component :: ∀ eff m o
   . MonadAff eff m
- => H.Component HH.HTML Query Input Message m
+ => H.Component HH.HTML (Query o) (Input o) (Message o) m
 component =
   H.component
     { initialState
@@ -35,14 +37,20 @@ component =
     }
   where
 
-  initialState :: Input -> StateStore
+  initialState :: Input o -> StateStore o
   initialState { render } = store render unit
 
-  eval :: Query ~> H.ComponentDSL StateStore Query Message m
+  eval
+    :: Query o
+    ~> H.ComponentDSL (StateStore o) (Query o) (Message o) m
   eval = case _ of
+    Raise query a -> do
+      H.raise (Emit query)
+      pure a
+
     Receive { render } a -> do
-      st <- H.get
-      H.put $ updateStore render (\s -> s) st
+      let stateUpdate = \s -> s
+      H.modify (updateStore render stateUpdate)
       pure a
 
 getState :: ∀ m s a
