@@ -13,4 +13,8 @@ For demonstration purposes this is a fully-functioning Halogen app.
 
 # Tutorial
 
-Upcoming.
+Upcoming. For now the component is exhaustively documented and I recommend reading those comments.
+
+# Todo
+
+- Add an intermediate component example (one that imports the base renderless component, extends it, and repeats the raise/emit pattern).
