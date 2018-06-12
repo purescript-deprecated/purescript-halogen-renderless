@@ -4,9 +4,9 @@ import Prelude
 
 import Control.Comonad (extract)
 import Control.Comonad.Store (Store, runStore, seeks, store)
-import Control.Monad.Aff.Class (class MonadAff)
-import Control.Monad.State (class MonadState)
-import Data.Tuple (Tuple(..), snd)
+import Control.Monad.State (class MonadState, get, modify, modify_, put)
+import Data.Tuple (fst, snd)
+import Effect.Aff.Class (class MonadAff)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -72,9 +72,7 @@ data Message o
 -- | Fortunately, end users of your component will not have to care
 -- | about `Store` at all and can use your component as they would
 -- | any other.
-component :: ∀ eff m o
-  . MonadAff eff m
- => H.Component HH.HTML (Query o) (Input o) (Message o) m
+component :: ∀ m o. MonadAff m => H.Component HH.HTML (Query o) (Input o) (Message o) m
 component =
   H.component
     { initialState
@@ -126,8 +124,7 @@ component =
     -- | render function from another component and therefore the
     -- | entire reason to use `Store` in the first place.
     Receive { render } a -> do
-      let stateUpdate = \s -> s
-      H.modify (updateStore render stateUpdate)
+      modifyStore_ render (\s -> s)
       pure a
 
 -- | We are working within the `State` monad as is always the case
@@ -139,19 +136,32 @@ component =
 -- | ```purescript
 -- | st <- getState
 -- | ```
-getState :: ∀ m s a
-   . MonadState (Store s a) m
-  => m s
-getState = map snd <<< pure <<< runStore =<< H.get
+getState :: ∀ m s a. MonadState (Store s a) m => m s
+getState = map snd <<< pure <<< runStore =<< get
 
--- | When you need to update your state within `Store` you can use
--- | the `seeks` function from `Control.Comonad.Store`:
+-- | You can also retrieve the render function, if you need to.
 -- |
 -- | ```purescript
--- | H.modify $ seeks $ \st -> st
+-- | render <- getRender
 -- | ```
+getRender :: ∀ m s a. MonadState (Store s a) m => m (s -> a)
+getRender = map fst <<< pure <<< runStore =<< get
+
+-- | When you are modifying the state type, you need to again get into
+-- | `Store` and apply the function there. We can do this with `seeks`
+-- | from the module. You could use this directly, or write helpers to
+-- | make it feel more natural.
 -- |
--- | However, in rare cases you will actually want to update the
+-- | ```purescript
+-- | modifyState_ \st -> st { field = newValue }
+-- | ```
+modifyState :: ∀ m s a. MonadState (Store s a) m => (s -> s) -> m (Store s a)
+modifyState = modify <<< seeks
+
+modifyState_ :: ∀ m s a. MonadState (Store s a) m => (s -> s) -> m Unit
+modifyState_ = modify_ <<< seeks
+
+-- | In rare cases you will actually want to update the
 -- | render function in `Store`. For those cases, you can use this
 -- | convenient function along with `H.modify` to easily perform
 -- | this kind of wholesale update:
@@ -169,4 +179,19 @@ updateStore :: ∀ state html
  -> Store state html
  -> Store state html
 updateStore r f
-  = (\(Tuple _ s) -> store r s) <<< runStore <<< seeks f
+  = store r <<< snd <<< runStore <<< seeks f
+
+-- | You could also use these helper functions directly
+-- |
+-- | ```purescript
+-- | newStore <- modifyStore render stateTransform
+-- | putStore render state
+-- | ```
+modifyStore :: ∀ m s a. MonadState (Store s a) m => (s -> a) -> (s -> s) -> m (Store s a)
+modifyStore r f = modify (updateStore r f)
+
+modifyStore_ :: ∀ m s a. MonadState (Store s a) m => (s -> a) -> (s -> s) -> m Unit
+modifyStore_ r f = modify_ (updateStore r f)
+
+putStore :: ∀ m s a. MonadState (Store s a) m => (s -> a) -> s -> m Unit
+putStore r s = put (store r s)
