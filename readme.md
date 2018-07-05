@@ -1,7 +1,6 @@
 # Renderless
 
 [![Latest release](http://img.shields.io/bower/v/purescript-halogen-renderless.svg)](https://github.com/thomashoneyman/purescript-halogen-renderless/releases)
-[![Pursuit](http://pursuit.purescript.org/packages/purescript-halogen-renderless/badge)](http://pursuit.purescript.org/packages/purescript-halogen-renderless/)
 [![Maintainer: thomashoneyman](https://img.shields.io/badge/maintainer-thomashoneyman-lightgrey.svg)](http://github.com/thomashoneyman)
 
 Renderless components are one approach for code reuse among Halogen components. By abstracting out the render function altogether, you can implement the component's behaviors and state without making any rendering decisions as a library author. As a library user, you can implement your rendering however you see fit and you can selectively attach the behaviors that have been made available to you.
