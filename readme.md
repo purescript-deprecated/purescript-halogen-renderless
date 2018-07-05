@@ -29,6 +29,7 @@ Module documentation is [published on Pursuit](http://pursuit.purescript.org/pac
 ## Renderless Components Built With This Library
 
 - [purescript-halogen-select](https://github.com/citizennet/purescript-halogen-select)
+- [purescript-halogen-formless](https://github.com/thomashoneyman/purescript-halogen-formless)
 
 # Examples
 
