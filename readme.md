@@ -29,7 +29,7 @@ Module documentation is [published on Pursuit](http://pursuit.purescript.org/pac
 
 ## Renderless Components Built With This Library
 
-- [purescript-halogen-select](https://github.com/citizennet/purescript-halogen-select) [![GitHub stars](https://img.shields.io/github/stars/badges/shields.svg?style=flat-square&label=Stars)](https://github.com/citizennet/purescript-halogen-select)
+- [purescript-halogen-select](https://github.com/citizennet/purescript-halogen-select)
 
 # Examples
 
