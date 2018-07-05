@@ -1,3 +1,10 @@
+-- | Renderless components use `Control.Comonad.Store` wrapped around
+-- | their state type. This allows true renderless components, as the
+-- | `extract` function from `Store` serves as the render function.
+-- | However, this means that state update functions in the component's
+-- | eval function are not actually operating on the component's state
+-- | type; they're operating on the `Store` instead. This module contains
+-- | helper functions to make this work easy to do.
 module Renderless.State where
 
 import Prelude
@@ -14,25 +21,33 @@ import Data.Tuple (fst, snd)
 -- | use it as you ordinarily would.
 -- |
 -- | ```purescript
+-- | -- Old
+-- | st <- H.get
+-- | -- New
 -- | st <- getState
 -- | ```
 getState :: ∀ m s a. MonadState (Store s a) m => m s
 getState = map snd <<< pure <<< runStore =<< get
 
--- | You can also retrieve the render function, if you need to.
+-- | You can also retrieve the render function, if you need to,
+-- | from within the `Store` comonad.
 -- |
 -- | ```purescript
--- | render <- getRender
+-- | renderFunction <- getRender
 -- | ```
 getRender :: ∀ m s a. MonadState (Store s a) m => m (s -> a)
 getRender = map fst <<< pure <<< runStore =<< get
 
--- | When you are modifying the state type, you need to again get into
--- | `Store` and apply the function there. We can do this with `seeks`
--- | from the module. You could use this directly, or write helpers to
+-- | When you are modifying the state type, you need to apply a function
+-- | (`state -> state`) within the `Store`. We can do this with the `seeks`
+-- | function from `Control.Comonad.Store`. You could use this directly, or
+-- | write helpers like the ones provided here.
 -- | make it feel more natural.
 -- |
 -- | ```purescript
+-- | -- without helpers
+-- | H.modify_ $ seeks $ \st -> st { field = newValue }
+-- | -- with helpers
 -- | modifyState_ \st -> st { field = newValue }
 -- | ```
 modifyState :: ∀ m s a. MonadState (Store s a) m => (s -> s) -> m (Store s a)
@@ -64,7 +79,8 @@ updateStore :: ∀ state html
 updateStore r f
   = store r <<< snd <<< runStore <<< seeks f
 
--- | You could also use these helper functions directly
+-- | You can also use these helper functions directly, rather than
+-- | pass `updateStore` to `modify`.
 -- |
 -- | ```purescript
 -- | newStore <- modifyStore render stateTransform
