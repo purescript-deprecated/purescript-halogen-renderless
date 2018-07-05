@@ -1,4 +1,4 @@
-module Renderless.Child where
+module Example.Child where
 
 import Prelude
 

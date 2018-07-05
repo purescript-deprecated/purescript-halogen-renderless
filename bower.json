@@ -16,8 +16,7 @@
   ],
   "dependencies": {
     "purescript-prelude": "^4.0.1",
-    "purescript-console": "^4.1.0",
-    "purescript-halogen": "^4.0.0",
-    "purescript-affjax": "^6.0.0"
+    "purescript-control": "^4.0.0",
+    "purescript-halogen": "^4.0.0"
   }
 }

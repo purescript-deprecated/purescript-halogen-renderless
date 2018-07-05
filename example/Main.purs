@@ -1,4 +1,4 @@
-module Main where
+module Example.Main where
 
 import Prelude
 
@@ -7,7 +7,7 @@ import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
 import Halogen.HTML as HH
 
-import Renderless.Child (component)
+import Example.Child (component)
 
 main :: Effect Unit
 main = HA.runHalogenAff do
