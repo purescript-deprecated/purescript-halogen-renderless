@@ -42,7 +42,6 @@ getRender = map fst <<< pure <<< runStore =<< get
 -- | (`state -> state`) within the `Store`. We can do this with the `seeks`
 -- | function from `Control.Comonad.Store`. You could use this directly, or
 -- | write helpers like the ones provided here.
--- | make it feel more natural.
 -- |
 -- | ```purescript
 -- | -- without helpers
@@ -50,8 +49,8 @@ getRender = map fst <<< pure <<< runStore =<< get
 -- | -- with helpers
 -- | modifyState_ \st -> st { field = newValue }
 -- | ```
-modifyState :: ∀ m s a. MonadState (Store s a) m => (s -> s) -> m (Store s a)
-modifyState = modify <<< seeks
+modifyState :: ∀ m s a. MonadState (Store s a) m => (s -> s) -> m s
+modifyState f = map snd <<< pure <<< runStore =<< modify (seeks f)
 
 modifyState_ :: ∀ m s a. MonadState (Store s a) m => (s -> s) -> m Unit
 modifyState_ = modify_ <<< seeks
