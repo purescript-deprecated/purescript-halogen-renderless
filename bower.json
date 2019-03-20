@@ -14,8 +14,10 @@
     "tests"
   ],
   "dependencies": {
-    "purescript-prelude": "^4.0.1",
-    "purescript-control": "^4.0.0",
+    "purescript-prelude": "^4.1.0",
+    "purescript-control": "^4.1.0"
+  },
+  "devDependencies": {
     "purescript-halogen": "^4.0.0"
   }
 }
