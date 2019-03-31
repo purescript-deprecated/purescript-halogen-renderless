@@ -7,7 +7,7 @@ import Control.Comonad.Store (Store, store)
 import Control.Monad.Free (liftF)
 import DOM.HTML.Indexed (HTMLinput)
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype, unwrap)
+import Data.Newtype (class Newtype)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Variant (SProxy(..), Variant, inj, onMatch)
@@ -19,60 +19,69 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.ChildQuery (ChildQueryBox)
 import Renderless.State (getState, modifyState_, modifyStore_)
+import Unsafe.Coerce (unsafeCoerce)
 import Web.Event.Event (preventDefault)
 import Web.UIEvent.KeyboardEvent as KE
 
-newtype Action pq ps m v = Action (Variant
+type Action ps m v = Variant 
   ( handleInput :: String 
   , handleKey :: KE.KeyboardEvent
-  , receive :: Input pq ps m v
-  , raise :: pq Unit
+  , receive :: Input ps m v
   | v
-  ))
+  )
 
-derive instance newtypeAction :: Newtype (Action pq ps m v) _
+handleInput :: forall ps m v. String -> Action ps m v
+handleInput = inj (SProxy :: _ "handleInput")
 
-handleInput :: forall pq ps m v. String -> Action pq ps m v
-handleInput = Action <<< inj (SProxy :: _ "handleInput")
+handleKey :: forall ps m v. KE.KeyboardEvent -> Action ps m v
+handleKey = inj (SProxy :: _ "handleKey")
 
-handleKey :: forall pq ps m v. KE.KeyboardEvent -> Action pq ps m v
-handleKey = Action <<< inj (SProxy :: _ "handleKey")
+receive :: forall ps m v. Input ps m v -> Action ps m v
+receive = inj (SProxy :: _ "receive")
 
-receive :: forall pq ps m v. Input pq ps m v -> Action pq ps m v
-receive = Action <<< inj (SProxy :: _ "receive")
-  
-raise :: forall pq ps m v. pq Unit -> Action pq ps m v
-raise = Action <<< inj (SProxy :: _ "raise")
+data Query ps v a
+  -- you can mount child components within the renderless component and send queries through to the
+  -- child using SendQuery; its result will be passed back to the parent directly, bypassing the
+  -- renderless component altogether. 
+  -- 
+  -- *** TODO: Experiment with triggering SendQuery in `handleAction` so that externally-provided
+  -- actions can simply do this and handle the result without it having to leak out to the parent
+  -- component at all.
+  = SendQuery (ChildQueryBox ps (Maybe a)) 
+  -- to preserve the existing semantics of actions as private, you can imperatively trigger your own
+  -- provided actions if you wish, but cannot trigger internal component ones.
+  | Perform (Variant v) a
 
-data Query ps a
-  = Send (ChildQueryBox ps (Maybe a)) 
+type Slot ps out v
+  = H.Slot (Query ps v) (Message out)
 
-type Slot pq ps
-  = H.Slot (Query ps) (Message pq)
-
-slotLabel :: SProxy "tagInput"
-slotLabel = SProxy
-
-type StateStore pq ps m v =
-  Store State (H.ComponentHTML (Action pq ps m v) ps m)
+type StateStore ps m v =
+  Store State (H.ComponentHTML (Action ps m v) ps m)
 
 type State = 
   { tags :: Set String 
   , text :: String 
   }
 
-type Input pq ps m v =
-  { render :: State -> H.ComponentHTML (Action pq ps m v) ps m 
+newtype Input ps m v = Input
+  { render :: State -> H.ComponentHTML (Action ps m v) ps m 
   }
 
-data Message pq
-  = Emit (pq Unit)
+derive instance newtypeInput :: Newtype (Input ps m v) _
+
+type Message out = Variant
+  ( tagAdded :: String
+  | out 
+  )
+
+tagAdded :: forall out. String -> Message out
+tagAdded = inj (SProxy :: _ "tagAdded")
 
 attachInputProps 
-  :: forall pq ps m v
+  :: forall ps m v
    . State 
-  -> Array (HH.IProp HTMLinput (Action pq ps m v)) 
-  -> Array (HH.IProp HTMLinput (Action pq ps m v))
+  -> Array (HH.IProp HTMLinput (Action ps m v)) 
+  -> Array (HH.IProp HTMLinput (Action ps m v))
 attachInputProps st = append 
   [ HP.value st.text
   , HE.onValueInput $ pure <<< handleInput
@@ -80,10 +89,10 @@ attachInputProps st = append
   ]
 
 component 
-  :: ∀ pq ps m v
+  :: ∀ ps out m v
    . MonadEffect m
-  => (Variant v -> H.HalogenM (StateStore pq ps m v) (Action pq ps m v) ps (Message pq) m Unit)
-  -> H.Component HH.HTML (Query ps) (Input pq ps m v) (Message pq) m
+  => (Variant v -> H.HalogenM (StateStore ps m v) (Action ps m v) ps (Message out) m Unit)
+  -> H.Component HH.HTML (Query ps v) (Input ps m v) (Message out) m
 component handleExtraAction =
   H.mkComponent
     { initialState
@@ -95,13 +104,13 @@ component handleExtraAction =
         }
     }
   where
-  initialState :: Input pq ps m v -> StateStore pq ps m v
-  initialState { render } = store render { tags: Set.fromFoldable [ "my-example-tag" ], text: "" }
+  initialState :: Input ps m v -> StateStore ps m v
+  initialState (Input { render }) = store render { tags: Set.fromFoldable [ "my-example-tag" ], text: "" }
 
   handleAction
-    :: Action pq ps m v
-    -> H.HalogenM (StateStore pq ps m v) (Action pq ps m v) ps (Message pq) m Unit
-  handleAction = unwrap >>> flip onMatch handleExtraAction
+    :: Action ps m v
+    -> H.HalogenM (StateStore ps m v) (Action ps m v) ps (Message out) m Unit
+  handleAction = flip onMatch handleExtraAction
     { handleInput: \str ->
         modifyState_ _ { text = str }
 
@@ -110,19 +119,21 @@ component handleExtraAction =
         st <- getState
         when (st.text /= "") do
           modifyState_ _ { tags = Set.insert st.text st.tags, text = "" }
+          H.raise $ tagAdded st.text
           handleAction $ handleInput "hello"
 
-    , raise: \act -> 
-        H.raise (Emit act)
-
-    , receive: \{ render } -> 
+    , receive: \(Input { render }) -> 
         modifyStore_ render (\s -> s)
     }
 
   handleQuery
     :: forall a
-     . Query ps a
-    -> H.HalogenM (StateStore pq ps m v) (Action pq ps m v) ps (Message pq) m (Maybe a)
+     . Query ps v a
+    -> H.HalogenM (StateStore ps m v) (Action ps m v) ps (Message out) m (Maybe a)
   handleQuery = case _ of
-    Send box -> 
+    SendQuery box -> do
       H.HalogenM $ liftF $ H.ChildQuery box
+    
+    Perform act a -> do
+      handleAction $ unsafeCoerce act
+      pure (Just a)
