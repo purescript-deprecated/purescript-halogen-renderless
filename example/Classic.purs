@@ -4,6 +4,7 @@ module Example.Classic where
 import Prelude
 
 import Data.Const (Const)
+import Data.FunctorWithIndex (mapWithIndex)
 import Data.Maybe (Maybe(..))
 import Data.Set as Set
 import Data.Symbol (SProxy(..))
@@ -42,33 +43,49 @@ type ExtraActions =
 removeTag :: forall v. String -> Variant (removeTag :: String | v)
 removeTag = inj (SProxy :: _ "removeTag") 
 
+-- we're also going to mount further components inside the render function for the tag input
+type InnerChildSlots = ( annotation :: H.Slot InnerQuery Void Int )
+
 -- Finally, we'll handle that action by removing the tag from TagInput state and raising our
 -- new message.
 type HandleExtraActions act out m =
-  H.HalogenM (TagInput.StateStore () m act) (TagInput.Action () m act) () (TagInput.Message out) m Unit
+  H.HalogenM (TagInput.StateStore InnerChildSlots m act) (TagInput.Action InnerChildSlots m act) InnerChildSlots (TagInput.Message out) m Unit
 
 handleExtraActions 
   :: forall m
-   . Variant ExtraActions 
+   . MonadEffect m
+  => Variant ExtraActions 
   -> HandleExtraActions ExtraActions ExtraMessages m
 handleExtraActions = match
   { removeTag: \tag -> do
       modifyState_ \st -> st { tags = Set.delete tag st.tags }
+      
+      -- you can rely on the existing handleAction and handleQuery functions to recursively call 
+      -- with further actions or queries.
+      _ <- TagInput.handleQuery handleExtraActions (TagInput.SelectTag "my-auto-selected-tag" unit)
+      TagInput.handleAction handleExtraActions (TagInput.handleInput "my-auto-selected-tag-1")
+
+      -- you can also send queries through the renderless component to a child component you 
+      -- placed in the render function
+      H.query _annotation 0 (GetAnnotation identity) >>= case _ of
+        Nothing -> log "no annotation at index 0"
+        Just str -> log $ "annotation found at index 0: " <> str
       H.raise (tagRemoved tag)
   }
 
 -- and now we'll write the render function for the extended component
 renderTagInput
   :: forall m
-   . TagInput.State 
-  -> H.ComponentHTML (TagInput.Action () m ExtraActions) () m
+   . MonadEffect m
+  => TagInput.State 
+  -> H.ComponentHTML (TagInput.Action InnerChildSlots m ExtraActions) InnerChildSlots m
 renderTagInput st@{ tags } = 
   HH.div_ 
     [ HH.input $ TagInput.attachInputProps st [] 
-    , HH.div_ $ Set.toUnfoldable tags # map \x -> 
+    , HH.div_ $ Set.toUnfoldable tags # mapWithIndex \i x -> 
         HH.li 
           [ HE.onClick \_ -> Just (removeTag x) ] 
-          [ HH.text x ]
+          [ HH.slot _annotation i innerComponent (x <> ".auto") absurd ]
     ]
 
 -----
@@ -81,7 +98,7 @@ data Action
   = HandleTagInput (TagInput.Message ExtraMessages)
 
 type ChildSlots =
-  ( tagInput :: TagInput.Slot () ExtraMessages ExtraActions Unit )
+  ( tagInput :: TagInput.Slot InnerChildSlots ExtraMessages ExtraActions Unit )
 
 component :: ∀ m. MonadEffect m => H.Component HH.HTML (Const Void) Unit Void m
 component =
@@ -95,19 +112,64 @@ component =
   render :: Unit -> H.ComponentHTML Action ChildSlots m
   render _ = 
     HH.div_ 
-      [ HH.slot (SProxy :: _ "tagInput") unit (TagInput.component handleExtraActions) (TagInput.Input { render: renderTagInput }) (Just <<< HandleTagInput) 
-      ]
+      [ HH.slot _tagInput unit (TagInput.component handleExtraActions) (TagInput.Input { render: renderTagInput }) (Just <<< HandleTagInput) ]
   
   -- we can write our handler pretty much as usual, but because Message is a variant, we'll use `match` 
   -- instead of `case`. Notice how you can only use `Perform` to trigger your own provided actions, not
   -- just any action at all.
+  handleAction :: _ -> H.HalogenM Unit _ _ _ m Unit
   handleAction = case _ of
     HandleTagInput msg -> msg # match
       { tagRemoved: \str -> do 
           log $ "Removed " <> str
       , tagAdded: \str -> do
           log $ "Added " <> str
-          _ <- H.query (SProxy :: _ "tagInput") unit $ H.tell $ TagInput.Perform (removeTag str)
+          _ <- H.query _tagInput unit $ H.tell $ TagInput.Perform (removeTag str)
+
+          -- you can send queries through two layers and get the result directly using `send`. as an
+          -- alternative, if you want this managed by the renderless component, you should extend the
+          -- algebra there with an action which sends and manages the result
+          mbAnnotation <- TagInput.send _tagInput unit _annotation 0 (GetAnnotation identity)
+
           pure unit
       }
       
+_tagInput = SProxy :: SProxy "tagInput"
+_annotation = SProxy :: SProxy "annotation"
+
+----------
+-- A child component to be passed to the tag input
+
+data InnerAction 
+  = Receive String
+
+data InnerQuery a
+  = GetAnnotation (String -> a)
+
+innerComponent :: ∀ m. MonadEffect m => H.Component HH.HTML InnerQuery String Void m
+innerComponent =
+  H.mkComponent
+    { initialState: identity
+    , render
+    , eval: H.mkEval $ defaultEval
+        { handleAction = handleAction 
+        , handleQuery = handleQuery
+        , receive = Just <<< Receive
+        }
+    }
+  where
+  render :: String -> H.ComponentHTML InnerAction () m
+  render str = 
+    HH.span_ [ HH.text $ "ANN: " <> str ] 
+  
+  -- we can write our handler pretty much as usual, but because Message is a variant, we'll use `match` 
+  -- instead of `case`. Notice how you can only use `Perform` to trigger your own provided actions, not
+  -- just any action at all.
+  handleAction = case _ of
+    Receive str -> H.put str
+  
+  handleQuery :: forall a. InnerQuery a -> H.HalogenM _ _ _ _ _ (Maybe a)
+  handleQuery = case _ of
+    GetAnnotation reply -> do
+      st <- H.get
+      pure $ Just $ reply st
