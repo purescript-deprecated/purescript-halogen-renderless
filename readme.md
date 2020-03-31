@@ -3,6 +3,12 @@
 [![Latest release](http://img.shields.io/github/release/thomashoneyman/purescript-halogen-renderless.svg)](https://github.com/thomashoneyman/purescript-halogen-renderless/releases)
 [![Maintainer: thomashoneyman](https://img.shields.io/badge/maintainer-thomashoneyman-lightgrey.svg)](http://github.com/thomashoneyman)
 
+## Notice
+
+**This library has been replaced by [Halogen Hooks](https://github.com/thomashoneyman/purescript-halogen-hooks).**
+
+## Getting started
+
 Renderless components are one approach for code reuse among Halogen components. By abstracting out the render function altogether, you can implement the component's behaviors and state without making any rendering decisions as a library author. As a library user, you can implement your rendering however you see fit and you can selectively attach the behaviors that have been made available to you.
 
 This repository contains two things:
@@ -11,8 +17,6 @@ This repository contains two things:
 - a library of helper functions for working with the `Store` comonad for your component state in `/src`.
 
 The component implemented in this project is a working renderless component. Either take it and use it as a scaffold for a new component you're building and would like to share, or use it to update an existing component to be renderless.
-
-## Getting started
 
 ``` purescript
 # psc-package
