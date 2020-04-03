@@ -4,4 +4,4 @@ This library is no longer maintained. Renderless components were a solution to r
 
 **This library has been replaced by [purescript-halogen-hooks](https://github.com/thomashoneyman/purescript-halogen-hooks).**
 
-[The previous releases](https://github.com/thomashoneyman/purescript-halogen-renderless/releases) will continue to work for older libraries that still depend on them. Libraries originally written using Renderless including [purescript-halogen-select](https://github.com/citizennet/purescript-halogen-select) and [purescript-halogen-formless](https://github.com/thomashoneyman/purescript-halogen-formless) either have already or should migrate to Hooks.
+[The previous releases](https://github.com/thomashoneyman/purescript-halogen-renderless/releases) will continue to work for older libraries that still depend on them.
